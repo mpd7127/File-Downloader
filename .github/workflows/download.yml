@@ -1,4 +1,5 @@
-name: File Downloader
+name: Download and Split to 45MB Parts
+
 on:
   workflow_dispatch:
     inputs:
@@ -47,9 +48,9 @@ jobs:
           FILENAME="${{ steps.vars.outputs.filename }}"
           PARTS_DIR="downloads/${FILENAME}.parts"
           mkdir -p "$PARTS_DIR"
-          cd "$PARTS_DIR"
-          7z a -v45m -mx0 "../${FILENAME}.7z" "../${FILENAME}"
-          rm -f "../${FILENAME}" "../${FILENAME}.7z"
+          cd downloads
+          7z a -v45m -mx0 "${FILENAME}.parts/${FILENAME}.7z" "$FILENAME"
+          rm -f "$FILENAME"
 
       - name: Commit and push parts
         run: |
