@@ -1,0 +1,70 @@
+name: Download and Upload to Repo
+
+on:
+  workflow_dispatch:
+    inputs:
+      url:
+        description: 'لینک مستقیم دانلود فایل'
+        required: true
+      filename:
+        description: 'نام فایل خروجی (اختیاری - در صورت خالی ماندن از لینک استخراج می‌شود)'
+        required: false
+        default: ''
+
+jobs:
+  download-and-commit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set filename
+        id: vars
+        run: |
+          if [ -z "${{ github.event.inputs.filename }}" ]; then
+            FILENAME=$(basename "${{ github.event.inputs.url }}" | cut -d '?' -f1)
+          else
+            FILENAME="${{ github.event.inputs.filename }}"
+          fi
+          echo "filename=$FILENAME" >> $GITHUB_OUTPUT
+
+      - name: Download file
+        run: |
+          mkdir -p downloads
+          cd downloads
+          curl -L -o "${{ steps.vars.outputs.filename }}" "${{ github.event.inputs.url }}"
+
+      - name: Split if larger than 50 MB
+        id: split
+        run: |
+          FILE="downloads/${{ steps.vars.outputs.filename }}"
+          SIZE=$(stat -c%s "$FILE")
+          MAX_SIZE=$((50 * 1024 * 1024))   # 50 MB in bytes
+
+          if [ "$SIZE" -gt "$MAX_SIZE" ]; then
+            echo "File size ${SIZE} bytes > 50 MB. Splitting into 45 MB parts..."
+            PARTS_DIR="downloads/${{ steps.vars.outputs.filename }}.parts"
+            mkdir -p "$PARTS_DIR"
+            split -b 45M -d "$FILE" "${PARTS_DIR}/${{ steps.vars.outputs.filename }}.part"
+            rm "$FILE"
+            echo "split=true" >> $GITHUB_OUTPUT
+          else
+            echo "File size ${SIZE} bytes <= 50 MB. Keeping original file."
+            echo "split=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Commit and push files
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloads/
+          if [ "${{ steps.split.outputs.split }}" = "true" ]; then
+            COMMIT_MSG="Add split parts for ${{ steps.vars.outputs.filename }} (45 MB each)"
+          else
+            COMMIT_MSG="Add downloaded file: ${{ steps.vars.outputs.filename }}"
+          fi
+          git commit -m "$COMMIT_MSG" || echo "No changes to commit"
+          git push
