@@ -7,7 +7,7 @@ on:
         description: 'Direct download link'
         required: true
       filename:
-        description: 'Output filename (optional - extracted from URL if empty)'
+        description: 'Output filename (optional)'
         required: false
         default: ''
 
@@ -47,13 +47,13 @@ jobs:
           UA="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
           REFERER="$(echo "$URL" | sed -E 's|(https?://[^/]+).*|\1|')/"
 
-          echo "Trying aria2c..."
+          echo "Trying aria2c (single connection)..."
           if aria2c \
-            --split=2 \
-            --max-connection-per-server=2 \
-            --min-split-size=20M \
-            --max-tries=3 \
-            --retry-wait=5 \
+            --split=1 \
+            --max-connection-per-server=1 \
+            --min-split-size=1M \
+            --max-tries=2 \
+            --retry-wait=3 \
             --timeout=60 \
             --connect-timeout=30 \
             --allow-overwrite=true \
@@ -64,7 +64,7 @@ jobs:
             "$URL" 2>/dev/null && [ -s "$FILENAME" ]; then
             echo "aria2c success"
           else
-            echo "aria2c failed, trying curl..."
+            echo "aria2c failed or single-connection blocked, using curl..."
             rm -f "$FILENAME" "$FILENAME.aria2"
             curl -L \
               --retry 3 \
